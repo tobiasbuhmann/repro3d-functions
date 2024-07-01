@@ -2,7 +2,7 @@
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 # More info on Python, GitHub Actions, and Azure Functions: https://aka.ms/python-webapps-actions
 
-name: Build and deploy Python project to Azure Function App - func-repro3d-print
+name: Azure Function App - Build & Deploy
 
 on:
   push:
@@ -11,8 +11,10 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: "." # path of app project, defaults to the repository root
+  PACKAGE_PATH: "." # path of app project, defaults to the repository root
   PYTHON_VERSION: "3.9"
+  APP_NAME: "func-repro3d-print"
+  ENVIRONMENT: "Production"
 
 jobs:
   build:
@@ -51,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     environment:
-      name: "Production"
+      name: ${{ env.ENVIRONMENT }}
       url: ${{ steps.deploy-to-function.outputs.webapp-url }}
     permissions:
       id-token: write #This is required for requesting the JWT
@@ -68,16 +70,16 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BF99EF9B107C47599DFCC17686894D57 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_9EAE1913341741C9B6C675B0D2E1C856 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_EB163AAF165742C9A926C6B752531417 }}
+          client-id: ${{ secrets.CLIENT_ID }}
+          tenant-id: ${{ secrets.TENANT_ID }}
+          subscription-id: ${{ secrets.SUBSCRIPTION_ID }}
 
-      - name: "Deploy to Azure Functions"
+      - name: "Deploy to Azure Function"
         uses: Azure/functions-action@v1
         id: deploy-to-function
         with:
-          app-name: "func-repro3d-print"
-          slot-name: "Production"
-          package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+          app-name: ${{ env.APP_NAME }}
+          slot-name: ${{ env.ENVIRONMENT }}
+          package: ${{ env.PACKAGE_PATH }}
           scm-do-build-during-deployment: true
           enable-oryx-build: true
