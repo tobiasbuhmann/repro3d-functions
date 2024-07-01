@@ -54,7 +54,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
 
     # Download the blob content to memory
-    blob_content = download_blob_to_memory(STORAGE_ACCOUNT_URL, STORAGE_CONTAINER_NAME, BLOB_NAME)
+    blob_content = download_blob_to_memory(STORAGE_ACCOUNT_URL, CONTAINER_NAME, BLOB_NAME)
     if blob_content is None:
         return func.HttpResponse("An error occurred while downloading the blob.", status_code=500)
 
