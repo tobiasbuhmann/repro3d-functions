@@ -14,7 +14,7 @@ STORAGE_ACCOUNT_URL = 'https://repro3d.blob.core.windows.net'
 CONTAINER_NAME = 'prusa-mk4'
 BLOB_NAME = 'prusa-mk4_ring.gcode'
 
-# Function to get secrets from Key Vault
+# Get secrets from Key Vault
 def get_secret(secret_name):
     try:
         credential = DefaultAzureCredential()
@@ -25,18 +25,18 @@ def get_secret(secret_name):
         logging.error(f"Error retrieving secret {secret_name}: {str(e)}")
         return None
 
-def download_blob(storage_account_url, container_name, blob_name):
+# Download blob from Storage Account
+def download_blob_to_memory(storage_account_url, container_name, blob_name):
     try:
         credential = DefaultAzureCredential()
         blob_service_client = BlobServiceClient(account_url=storage_account_url, credential=credential)
         blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
         
-        with open(blob_name, "wb") as file:
-            download_stream = blob_client.download_blob()
-            file.write(download_stream.readall())
+        download_stream = blob_client.download_blob()
+        blob_content = download_stream.readall()
         
         logging.info(f"Blob {blob_name} downloaded successfully.")
-        return blob_name
+        return blob_content
     except Exception as e:
         logging.error(f"Error downloading blob {blob_name}: {str(e)}")
         return None
@@ -53,10 +53,13 @@ def send_request(url, method='POST', json=None, headers=None):
 def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
 
-    # Download a specific blob from Azure Storage
-    blob_file = download_blob(STORAGE_ACCOUNT_URL, CONTAINER_NAME, BLOB_NAME)
-    if not blob_file:
+    # Download the blob content to memory
+    blob_content = download_blob_to_memory(STORAGE_ACCOUNT_URL, STORAGE_CONTAINER_NAME, BLOB_NAME)
+    if blob_content is None:
         return func.HttpResponse("An error occurred while downloading the blob.", status_code=500)
+
+    # Use blob_content as needed. For example, log its size:
+    logging.info(f"Downloaded blob size: {len(blob_content)} bytes")
     
     # Retrieve secrets from Key Vault
     TUNNEL_URL = get_secret(TUNNEL_URL_SECRET_NAME)

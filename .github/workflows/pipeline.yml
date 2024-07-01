@@ -8,13 +8,11 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 env:
   PACKAGE_PATH: "." # path of app project, defaults to the repository root
   PYTHON_VERSION: "3.9"
   APP_NAME: "func-repro3d-print"
-  ENVIRONMENT: "Production"
 
 jobs:
   build:
@@ -76,7 +74,6 @@ jobs:
         id: deploy-to-function
         with:
           app-name: ${{ env.APP_NAME }}
-          slot-name: ${{ env.ENVIRONMENT }}
           package: ${{ env.PACKAGE_PATH }}
           scm-do-build-during-deployment: true
           enable-oryx-build: true
