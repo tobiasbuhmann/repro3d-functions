@@ -6,10 +6,30 @@
         "isEnabled": true,
         "excludedTypes": "Request"
       }
-    }
+    },
+    "logLevel": {
+      "Function": "Information",
+      "default": "Warning",
+      "Host.Results": "Error",
+      "Host.Aggregator": "Information",
+      "Host.Executor": "Information"
+    },
+    "console": {
+      "isEnabled": true,
+      "minLevel": "Information"
+    },
+    "fileLoggingMode": "always"
   },
   "extensionBundle": {
     "id": "Microsoft.Azure.Functions.ExtensionBundle",
     "version": "[4.*, 5.0.0)"
-  }
+  },
+  "extensions": {
+    "http": {
+      "routePrefix": "api",
+      "maxConcurrentRequests": 100,
+      "maxOutstandingRequests": 200
+    }
+  },
+  "functionTimeout": "00:05:00"
 }
