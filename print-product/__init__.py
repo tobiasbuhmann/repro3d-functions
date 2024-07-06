@@ -3,6 +3,7 @@ import hmac
 import hashlib
 import base64
 import requests
+import time
 import azure.functions as func
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
@@ -62,6 +63,63 @@ def upload_file_to_octoprint(tunnel_url, api_key, file_name, file_content):
         logging.error(f"Error uploading file to OctoPrint: {str(e)}")
         raise
 
+# Start print job on OctoPrint
+def start_print_job(tunnel_url, api_key, file_name):
+    try:
+        headers = {
+            'X-Api-Key': api_key
+        }
+        data = {
+            'command': 'select',
+            'print': True
+        }
+        response = requests.post(f"{tunnel_url}/api/files/local/{file_name}", headers=headers, json=data)
+        response.raise_for_status()
+        logging.info(f"Print job for {file_name} started successfully.")
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error starting print job for {file_name}: {str(e)}")
+        raise
+
+# Delete file on OctoPrint
+def delete_file_on_octoprint(tunnel_url, api_key, file_name):
+    try:
+        headers = {
+            'X-Api-Key': api_key
+        }
+        response = requests.delete(f"{tunnel_url}/api/files/local/{file_name}", headers=headers)
+        response.raise_for_status()
+        logging.info(f"File {file_name} deleted from OctoPrint successfully.")
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error deleting file {file_name} from OctoPrint: {str(e)}")
+        raise
+
+# Monitor print job on OctoPrint
+def monitor_print_job(tunnel_url, api_key):
+    try:
+        headers = {
+            'X-Api-Key': api_key
+        }
+        while True:
+            response = requests.get(f"{tunnel_url}/api/job", headers=headers)
+            response.raise_for_status()
+            job_status = response.json()
+            
+            state = job_status.get('state')
+            logging.info(f"Current print job state: {state}")
+            
+            if state in ['Operational', 'Paused']:
+                return job_status
+            elif state == 'Error':
+                logging.error("Print job encountered an error.")
+                raise Exception("Print job encountered an error.")
+            
+            time.sleep(30)  # Wait for 30 seconds before checking again
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error monitoring print job: {str(e)}")
+        raise
+
 # Verify Shopify webhook
 def verify_shopify_webhook(req, shopify_secret):
     hmac_header = req.headers.get('X-Shopify-Hmac-Sha256')
@@ -101,13 +159,42 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     # Upload the file to OctoPrint
     try:
         upload_response = upload_file_to_octoprint(TUNNEL_URL, OCTOPRINT_API_KEY, BLOB_NAME, blob_content)
-        return func.HttpResponse(
-            f"File uploaded successfully: {upload_response}",
-            status_code=200
-        )
     except Exception as e:
-        logging.error(f"Error in main function: {str(e)}")
+        logging.error(f"Error uploading file to OctoPrint: {str(e)}")
         return func.HttpResponse(
             f"An error occurred: {str(e)}",
             status_code=500
         )
+
+    # Start the print job on OctoPrint
+    try:
+        print_response = start_print_job(TUNNEL_URL, OCTOPRINT_API_KEY, BLOB_NAME)
+    except Exception as e:
+        logging.error(f"Error starting print job: {str(e)}")
+        return func.HttpResponse(
+            f"An error occurred while starting the print job: {str(e)}",
+            status_code=500
+        )
+
+    # Monitor the print job and delete the file after a successful print
+    try:
+        job_status = monitor_print_job(TUNNEL_URL, OCTOPRINT_API_KEY)
+        if job_status.get('state') == 'Operational':
+            delete_response = delete_file_on_octoprint(TUNNEL_URL, OCTOPRINT_API_KEY, BLOB_NAME)
+        else:
+            logging.error(f"Unexpected print job state: {job_status.get('state')}")
+            return func.HttpResponse(
+                f"Unexpected print job state: {job_status.get('state')}",
+                status_code=500
+            )
+    except Exception as e:
+        logging.error(f"Error during print job monitoring or file deletion: {str(e)}")
+        return func.HttpResponse(
+            f"An error occurred: {str(e)}",
+            status_code=500
+        )
+
+    return func.HttpResponse(
+        f"File uploaded, print started, and file deleted successfully: {print_response}",
+        status_code=200
+    )
