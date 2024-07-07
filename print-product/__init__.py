@@ -31,94 +31,65 @@ def get_secret(secret_name):
         logging.error(f"Error retrieving secret {secret_name}: {str(e)}")
         raise
 
-# Download blob from Storage Account
-def download_blob_to_memory(storage_account_url, container_name, blob_name):
-    try:
-        blob_service_client = BlobServiceClient(account_url=storage_account_url, credential=credential)
-        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-        
-        download_stream = blob_client.download_blob()
-        blob_content = download_stream.readall()
-        
-        logging.info(f"Blob {blob_name} downloaded successfully.")
-        return blob_content
-    except Exception as e:
-        logging.error(f"Error downloading blob {blob_name}: {str(e)}")
-        raise
+# Blob Downloader Class
+class BlobDownloader:
+    def __init__(self, account_url, credential):
+        self.blob_service_client = BlobServiceClient(account_url=account_url, credential=credential)
 
-# Upload the file to OctoPrint
-def upload_file_to_octoprint(tunnel_url, api_key, file_name, file_content):
-    try:
-        headers = {
-            'X-Api-Key': api_key
-        }
-        files = {
-            'file': (file_name, file_content)
-        }
-        response = requests.post(f"{tunnel_url}/api/files/local", headers=headers, files=files)
-        response.raise_for_status()
-        logging.info(f"File {file_name} uploaded to OctoPrint successfully.")
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error uploading file to OctoPrint: {str(e)}")
-        raise
+    async def download_blob(self, container_name, blob_name):
+        blob_client = self.blob_service_client.get_blob_client(container_name, blob_name)
+        download_stream = blob_client.download_blob()
+        blob_content = await download_stream.readall()
+        return blob_content
+
+# Download blob content
+async def download_blob_to_memory(storage_account_url, container_name, blob_name):
+    downloader = BlobDownloader(storage_account_url, credential)
+    blob_content = await downloader.download_blob(container_name, blob_name)
+    logging.info(f"Blob {blob_name} downloaded successfully.")
+    return blob_content
+
+# Upload file to OctoPrint
+async def upload_file_to_octoprint(tunnel_url, api_key, file_name, file_content):
+    headers = {'X-Api-Key': api_key}
+    files = {'file': (file_name, file_content)}
+    response = requests.post(f"{tunnel_url}/api/files/local", headers=headers, files=files)
+    response.raise_for_status()
+    logging.info(f"File {file_name} uploaded to OctoPrint successfully.")
+    return response.json()
 
 # Start print job on OctoPrint
-def start_print_job(tunnel_url, api_key, file_name):
-    try:
-        headers = {
-            'X-Api-Key': api_key
-        }
-        data = {
-            'command': 'select',
-            'print': True
-        }
-        response = requests.post(f"{tunnel_url}/api/files/local/{file_name}", headers=headers, json=data)
-        response.raise_for_status()
-        logging.info(f"Print job for {file_name} started successfully.")
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error starting print job for {file_name}: {str(e)}")
-        raise
+async def start_print_job(tunnel_url, api_key, file_name):
+    headers = {'X-Api-Key': api_key}
+    data = {'command': 'select', 'print': True}
+    response = requests.post(f"{tunnel_url}/api/files/local/{file_name}", headers=headers, json=data)
+    response.raise_for_status()
+    logging.info(f"Print job for {file_name} started successfully.")
+    return response.json()
 
 # Delete file on OctoPrint
-def delete_file_on_octoprint(tunnel_url, api_key, file_name):
-    try:
-        headers = {
-            'X-Api-Key': api_key
-        }
-        response = requests.delete(f"{tunnel_url}/api/files/local/{file_name}", headers=headers)
-        response.raise_for_status()
-        logging.info(f"File {file_name} deleted from OctoPrint successfully.")
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error deleting file {file_name} from OctoPrint: {str(e)}")
-        raise
+async def delete_file_on_octoprint(tunnel_url, api_key, file_name):
+    headers = {'X-Api-Key': api_key}
+    response = requests.delete(f"{tunnel_url}/api/files/local/{file_name}", headers=headers)
+    response.raise_for_status()
+    logging.info(f"File {file_name} deleted from OctoPrint successfully.")
+    return response.json()
 
 # Monitor print job on OctoPrint
-def monitor_print_job(tunnel_url, api_key):
-    try:
-        headers = {
-            'X-Api-Key': api_key
-        }
-        while True:
-            response = requests.get(f"{tunnel_url}/api/job", headers=headers)
-            response.raise_for_status()
-            job_status = response.json()
-            
-            state = job_status.get('state')
-            logging.info(f"Current print job state: {state}")
-            
-            if state in ['Operational', 'Paused']:
-                return job_status
-            elif state == 'Error':
-                logging.error("Print job encountered an error.")
-                raise Exception("Print job encountered an error.")
-            
-            time.sleep(30)  # Wait for 30 seconds before checking again
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error monitoring print job: {str(e)}")
-        raise
+async def monitor_print_job(tunnel_url, api_key):
+    headers = {'X-Api-Key': api_key}
+    while True:
+        response = requests.get(f"{tunnel_url}/api/job", headers=headers)
+        response.raise_for_status()
+        job_status = response.json()
+        state = job_status.get('state')
+        logging.info(f"Current print job state: {state}")
+        if state in ['Operational', 'Paused']:
+            return job_status
+        elif state == 'Error':
+            logging.error("Print job encountered an error.")
+            raise Exception("Print job encountered an error.")
+        time.sleep(30)  # Wait for 30 seconds before checking again
 
 # Verify Shopify webhook
 def verify_shopify_webhook(req, shopify_secret):
@@ -132,8 +103,8 @@ def verify_shopify_webhook(req, shopify_secret):
 
     return hmac_header == calculated_hmac
 
-# Main
-def main(req: func.HttpRequest) -> func.HttpResponse:
+# Main function
+async def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
 
     # Retrieve secrets from Key Vault
@@ -151,14 +122,14 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     if not verify_shopify_webhook(req, SHOPIFY_SECRET):
         return func.HttpResponse("Unauthorized", status_code=401)
 
-    # Download the blob content to memory
-    blob_content = download_blob_to_memory(STORAGE_ACCOUNT_URL, CONTAINER_NAME, BLOB_NAME)
+    # Download the blob content to memory asynchronously
+    blob_content = await download_blob_to_memory(STORAGE_ACCOUNT_URL, CONTAINER_NAME, BLOB_NAME)
     if blob_content is None:
         return func.HttpResponse("An error occurred while downloading the blob.", status_code=500)
 
-    # Upload the file to OctoPrint
+    # Upload the file to OctoPrint asynchronously
     try:
-        upload_response = upload_file_to_octoprint(TUNNEL_URL, OCTOPRINT_API_KEY, BLOB_NAME, blob_content)
+        upload_response = await upload_file_to_octoprint(TUNNEL_URL, OCTOPRINT_API_KEY, BLOB_NAME, blob_content)
     except Exception as e:
         logging.error(f"Error uploading file to OctoPrint: {str(e)}")
         return func.HttpResponse(
@@ -166,9 +137,9 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             status_code=500
         )
 
-    # Start the print job on OctoPrint
+    # Start the print job on OctoPrint asynchronously
     try:
-        print_response = start_print_job(TUNNEL_URL, OCTOPRINT_API_KEY, BLOB_NAME)
+        print_response = await start_print_job(TUNNEL_URL, OCTOPRINT_API_KEY, BLOB_NAME)
     except Exception as e:
         logging.error(f"Error starting print job: {str(e)}")
         return func.HttpResponse(
@@ -178,9 +149,9 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     # Monitor the print job and delete the file after a successful print
     try:
-        job_status = monitor_print_job(TUNNEL_URL, OCTOPRINT_API_KEY)
+        job_status = await monitor_print_job(TUNNEL_URL, OCTOPRINT_API_KEY)
         if job_status.get('state') == 'Operational':
-            delete_response = delete_file_on_octoprint(TUNNEL_URL, OCTOPRINT_API_KEY, BLOB_NAME)
+            delete_response = await delete_file_on_octoprint(TUNNEL_URL, OCTOPRINT_API_KEY, BLOB_NAME)
         else:
             logging.error(f"Unexpected print job state: {job_status.get('state')}")
             return func.HttpResponse(
