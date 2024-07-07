@@ -36,10 +36,10 @@ class BlobDownloader:
     def __init__(self, account_url, credential):
         self.blob_service_client = BlobServiceClient(account_url=account_url, credential=credential)
 
-    async def download_blob(self, container_name, blob_name):
+    def download_blob(self, container_name, blob_name):
         blob_client = self.blob_service_client.get_blob_client(container_name, blob_name)
         download_stream = blob_client.download_blob()
-        blob_content = await download_stream.readall()
+        blob_content = download_stream.readall() 
         return blob_content
 
 # Download blob content
@@ -103,7 +103,8 @@ def verify_shopify_webhook(req, shopify_secret):
 
     return hmac_header == calculated_hmac
 
-# Main function
+
+# Main
 async def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
 
@@ -123,7 +124,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse("Unauthorized", status_code=401)
 
     # Download the blob content to memory asynchronously
-    blob_content = await download_blob_to_memory(STORAGE_ACCOUNT_URL, CONTAINER_NAME, BLOB_NAME)
+    blob_content = download_blob_to_memory(STORAGE_ACCOUNT_URL, CONTAINER_NAME, BLOB_NAME)
     if blob_content is None:
         return func.HttpResponse("An error occurred while downloading the blob.", status_code=500)
 
