@@ -37,7 +37,7 @@ jobs:
       - name: Zip artifact for deployment
         run: |
           source venv/bin/activate
-          zip -r release.zip . -x "venv/*"
+          zip -r release.zip . -x "venv/*" -x ".github/*" -x ".git/*"
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -68,7 +68,7 @@ jobs:
           subscription-id: ${{ secrets.SUBSCRIPTION_ID }}
 
       - name: Deploy to Azure Function
-        uses: Azure/functions-action@v1
+        uses: azure/functions-action@v1
         id: deploy-to-function
         with:
           app-name: ${{ env.APP_NAME }}
