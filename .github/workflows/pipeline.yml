@@ -12,7 +12,7 @@ on:
 env:
   PACKAGE_PATH: "." # path of app project, defaults to the repository root
   PYTHON_VERSION: "3.9"
-  APP_NAME: "func-repro3d-print"
+  APP_NAME: "repro3d"
 
 jobs:
   build:
