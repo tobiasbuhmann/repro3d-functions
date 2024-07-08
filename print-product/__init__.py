@@ -9,21 +9,23 @@ from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 from azure.storage.blob import BlobServiceClient
 
-# Define constants
-KEY_VAULT_URL = 'https://kv-repro3d.vault.azure.net'
-STORAGE_ACCOUNT_URL = 'https://repro3d.blob.core.windows.net'
-CONTAINER_NAME = 'prusa-mk4'
-BLOB_NAME = 'prusa-mk4_ring.gcode'
-TUNNEL_URL_SECRET_NAME = 'TunnelUrl'
-OCTOPRINT_API_KEY_SECRET_NAME = 'OctoprintApiKey'
-SHOPIFY_SECRET_NAME = "ShopifySecret"
-POLL_INTERVAL = 30  # seconds
+# Configurations & Constants
+CONFIG = {
+    "KEY_VAULT_URL": 'https://kv-repro3d.vault.azure.net',
+    "STORAGE_ACCOUNT_URL": 'https://repro3d.blob.core.windows.net',
+    "CONTAINER_NAME": 'prusa-mk4',
+    "BLOB_NAME": 'keychain.gcode',
+    "TUNNEL_URL_SECRET_NAME": 'TunnelUrl',
+    "OCTOPRINT_API_KEY_SECRET_NAME": 'OctoprintApiKey',
+    "SHOPIFY_SECRET_NAME": "ShopifySecret",
+    "POLL_INTERVAL": 30
+}
 
-# Initialize Azure credentials
 credential = DefaultAzureCredential()
+http_session = requests.Session()
 
 def get_secret(secret_name):
-    key_vault_client = SecretClient(vault_url=KEY_VAULT_URL, credential=credential)
+    key_vault_client = SecretClient(vault_url=CONFIG["KEY_VAULT_URL"], credential=credential)
     secret = key_vault_client.get_secret(secret_name)
     return secret.value
 
@@ -36,27 +38,30 @@ def download_blob_to_memory(storage_account_url, container_name, blob_name):
 def upload_file_to_octoprint(tunnel_url, api_key, file_name, file_content):
     headers = {'X-Api-Key': api_key}
     files = {'file': (file_name, file_content)}
-    response = requests.post(f"{tunnel_url}/api/files/local", headers=headers, files=files)
+    response = http_session.post(f"{tunnel_url}/api/files/local", headers=headers, files=files)
     response.raise_for_status()
     return response.json()
 
 def start_print_job(tunnel_url, api_key, file_name):
     headers = {'X-Api-Key': api_key}
     data = {'command': 'select', 'print': True}
-    response = requests.post(f"{tunnel_url}/api/files/local/{file_name}", headers=headers, json=data)
+    response = http_session.post(f"{tunnel_url}/api/files/local/{file_name}", headers=headers, json=data)
     response.raise_for_status()
     return response.json()
 
 def delete_file_on_octoprint(tunnel_url, api_key, file_name):
     headers = {'X-Api-Key': api_key}
-    response = requests.delete(f"{tunnel_url}/api/files/local/{file_name}", headers=headers)
+    response = http_session.delete(f"{tunnel_url}/api/files/local/{file_name}", headers=headers)
     response.raise_for_status()
     return response.json()
 
 def monitor_print_job(tunnel_url, api_key, file_name):
     headers = {'X-Api-Key': api_key}
+    initial_poll_interval = CONFIG["POLL_INTERVAL"]
+    max_poll_interval = 300
+    poll_interval = initial_poll_interval
     while True:
-        response = requests.get(f"{tunnel_url}/api/job", headers=headers)
+        response = http_session.get(f"{tunnel_url}/api/job", headers=headers)
         response.raise_for_status()
         job_status = response.json()
         state = job_status.get('state')
@@ -69,7 +74,8 @@ def monitor_print_job(tunnel_url, api_key, file_name):
             delete_file_on_octoprint(tunnel_url, api_key, file_name)
             logging.info(f"File {file_name} deleted after job completion.")
             return job_status
-        time.sleep(POLL_INTERVAL)
+        time.sleep(poll_interval)
+        poll_interval = min(poll_interval + 30, max_poll_interval)
 
 def verify_shopify_webhook(req, shopify_secret):
     hmac_header = req.headers.get('X-Shopify-Hmac-Sha256')
@@ -82,11 +88,10 @@ def verify_shopify_webhook(req, shopify_secret):
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
-
     try:
-        TUNNEL_URL = get_secret(TUNNEL_URL_SECRET_NAME)
-        OCTOPRINT_API_KEY = get_secret(OCTOPRINT_API_KEY_SECRET_NAME)
-        SHOPIFY_SECRET = get_secret(SHOPIFY_SECRET_NAME)
+        TUNNEL_URL = get_secret(CONFIG["TUNNEL_URL_SECRET_NAME"])
+        OCTOPRINT_API_KEY = get_secret(CONFIG["OCTOPRINT_API_KEY_SECRET_NAME"])
+        SHOPIFY_SECRET = get_secret(CONFIG["SHOPIFY_SECRET_NAME"])
     except Exception as e:
         logging.error(f"Error retrieving secrets: {str(e)}")
         return func.HttpResponse(f"Error retrieving secrets: {str(e)}", status_code=500)
@@ -95,10 +100,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse("Unauthorized", status_code=401)
 
     try:
-        blob_content = download_blob_to_memory(STORAGE_ACCOUNT_URL, CONTAINER_NAME, BLOB_NAME)
-        upload_response = upload_file_to_octoprint(TUNNEL_URL, OCTOPRINT_API_KEY, BLOB_NAME, blob_content)
-        print_response = start_print_job(TUNNEL_URL, OCTOPRINT_API_KEY, BLOB_NAME)
-        job_status = monitor_print_job(TUNNEL_URL, OCTOPRINT_API_KEY, BLOB_NAME)
+        blob_content = download_blob_to_memory(CONFIG["STORAGE_ACCOUNT_URL"], CONFIG["CONTAINER_NAME"], CONFIG["BLOB_NAME"])
+        upload_response = upload_file_to_octoprint(TUNNEL_URL, OCTOPRINT_API_KEY, CONFIG["BLOB_NAME"], blob_content)
+        print_response = start_print_job(TUNNEL_URL, OCTOPRINT_API_KEY, CONFIG["BLOB_NAME"])
+        job_status = monitor_print_job(TUNNEL_URL, OCTOPRINT_API_KEY, CONFIG["BLOB_NAME"])
     except Exception as e:
         logging.error(f"Error: {str(e)}")
         return func.HttpResponse(f"Error: {str(e)}", status_code=500)
