@@ -14,7 +14,7 @@ CONFIG = {
     "KEY_VAULT_URL": 'https://kv-repro3d.vault.azure.net',
     "STORAGE_ACCOUNT_URL": 'https://repro3d.blob.core.windows.net',
     "CONTAINER_NAME": 'prusa-mk4',
-    "BLOB_NAME": 'keychain.gcode',
+    "BLOB_NAME": 'prusa-mk4_ring.gcode',
     "TUNNEL_URL_SECRET_NAME": 'TunnelUrl',
     "OCTOPRINT_API_KEY_SECRET_NAME": 'OctoprintApiKey',
     "SHOPIFY_SECRET_NAME": "ShopifySecret"
@@ -29,12 +29,12 @@ def get_secret(secret_name):
     secret = key_vault_client.get_secret(secret_name)
     return secret.value
 
+# Download blob from Azure Storage to memory
 def download_blob_to_memory(storage_account_url, container_name, blob_name):
-    # Download blob from Azure Storage to memory
     blob_service_client = BlobServiceClient(account_url=storage_account_url, credential=credential)
     blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-    with blob_client.download_blob() as download_stream:
-        return download_stream.readall()
+    download_stream = blob_client.download_blob()
+    return download_stream.readall()
 
 # Upload file to OctoPrint
 def upload_file_to_octoprint(tunnel_url, api_key, file_name, file_content):
@@ -74,6 +74,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(f"Error retrieving secrets: {str(e)}", status_code=500)
 
     if not verify_shopify_webhook(req, SHOPIFY_SECRET):
+        logging.error(f"Error verifying webhook authenticity: {str(e)}")
         return func.HttpResponse("Unauthorized", status_code=401)
 
     try:
