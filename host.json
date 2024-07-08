@@ -9,10 +9,7 @@
     },
     "logLevel": {
       "Function": "Information",
-      "default": "Warning",
-      "Host.Results": "Error",
-      "Host.Aggregator": "Information",
-      "Host.Executor": "Information"
+      "Host.Results": "Error"
     },
     "console": {
       "isEnabled": true,
